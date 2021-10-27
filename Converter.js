@@ -54,45 +54,48 @@ module.exports.jsonTextToText = function(json = "") {
 	return outText;
 }
 
-module.exports.blockidConveter = function(blockname = "") {
-	switch (blockname) {
+module.exports.blockidConveter = function(block) {
+	switch (block.name) {
 		case "grass_block":
-			return 2;
+			return [2, 0, block.light];
 
 		case "andesite":
 		case "granite":
 		case "diorite":
 		case "stone":
-			return 1;
+			return [1, 0, block.light];
 
 		case "podzol":
 		case "coarse_dirt":
-			return 3;
+			return [3, 0, block.light];
 
 		case "coal_ore":
-			return 16;
+			return [16, 0, block.light];
 
 		case "iron_ore":
-			return 15;
+			return [15, 0, block.light];
 
 		case "gold_ore":
-			return 14;
+			return [14, 0, block.light];
 		
 		case "lapis_ore":
-			return 21;		
+			return [21, 0, block.light];		
 
 		case "diamond_ore":
-			return 56;
+			return [56, 0, block.light];
 
 		case "portal":
-			return 90;
+			return [90, 0, block.light];
 
 		case "end_rod":
 		case "glowstone":
-			return 89;
+			return [89, 0, block.light];
 
 		case "water":
-			return 9;
+			return [9, 0, block.light];
+
+		case "sand":
+			return [12, 0, block.light];
 
 		case "oak_logs":
 		case "birch_logs":
@@ -106,7 +109,7 @@ module.exports.blockidConveter = function(blockname = "") {
 		case "jungle_log":
 		case "acacia_log":
 		case "dark_oak_log":
-			return 17;
+			return [17, 0, block.light];
 
 		case "oak_leaves":
 		case "birch_leaves":
@@ -114,34 +117,42 @@ module.exports.blockidConveter = function(blockname = "") {
 		case "acacia_leaves":
 		case "dark_oak_leaves":
 		case "jungle_leaves":
-			return 18;
+			return [18, 0, block.light];
 
 		case "cobblestone":
-			return 4;
+			return [4, 0, block.light];
 
 		case "smooth_stone":
-			return 1;
+			return [1, 0, block.light];
 
 		case "campfire":
-			return 51;
+			return [51, 0, block.light];
 
 		case "dirt":
-			return 3;
+			return [3, 0, block.light];
 
+		case "oak_fence":
+		case "birch_fence":
+		case "spruce_fence":
+		case "jungle_fence":
+		case "acacia_fence":
 		case "dark_oak_fence":
-			return 85;
+			return [85, 0, block.light];
 
 		case "lantern":
-			return 89;
+			return [89, 0, block.light];
 
 		case "grass":
-			return 31;
+			return [31, 1, block.light];
 
 		case "barrier":
-			return 20;
+			return [20, 0, block.light];
+
+		case "torch":
+			return [50, 0, block.light];
 
 		default:
-			return 0;
+			return [0, 0, block.light];
 	}
 }
 

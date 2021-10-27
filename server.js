@@ -3,6 +3,7 @@ var mc = require('minecraft-protocol');
 const mineflayer = require("mineflayer");
 const bufferStuff = require("./bufferStuff.js");
 const { deflateSync } = require("zlib");
+const funkyArray = require("./funkyArray.js");
 
 const Vec3 = require("vec3");
 
@@ -20,10 +21,12 @@ server.on("connection", (socket) => {
 
 	//piss
 
+	let chunksToSend = new funkyArray();
+
 	var client = mc.createClient({
 		host: "192.168.2.240",   // optional minecraft.eusv.ml
 		port: 27896,         // optional
-		username: "mcb1730",
+		username: "mcb1732",
 		auth: 'mojang', // optional; by default uses mojang, if using a microsoft account, set to 'microsoft'
 		version: "1.16.5"
 	});
@@ -32,8 +35,17 @@ server.on("connection", (socket) => {
 	client.on('packet', function(packet, packetMeta) {
 		//console.log(packetMeta.name);
 		switch (packetMeta.name) {
+			case "update_health":
+				socket.write(new PacketMappingTable[NamedPackets.UpdateHealth](packet.health + 1).writePacket());
+			break;
+
+			case "update_time":
+				socket.write(new PacketMappingTable[NamedPackets.TimeUpdate](packet.time).writePacket());
+			break;
+
 			case "position":
-				console.log(packet);
+				socket.write(new PacketMappingTable[NamedPackets.PlayerPositionAndLook](packet.x, packet.y + 1.6200000047683716, packet.y, packet.z, packet.yaw, packet.pitch, false).writePacket());
+				client.write("teleport_confirm", {teleportId: packet.teleportId});
 			break;
 
 			case "player_info":
@@ -41,7 +53,7 @@ server.on("connection", (socket) => {
 			break;
 
 			case "chat":
-				console.log(packet);
+				//console.log(packet);
 				socket.write(new PacketMappingTable[NamedPackets.ChatMessage](Converter.jsonTextToText(packet.message)).writePacket());
 			break;
 
@@ -59,34 +71,31 @@ server.on("connection", (socket) => {
 
 				socket.write(new PacketMappingTable[NamedPackets.PreChunk](packet.x, packet.z, true).writePacket());
 
-				for (let x = 0; x < 16; x++) {
-					for (let z = 0; z < 16; z++) {
-						for (let y = 0; y < 128; y++) {
-							if (y < 30 && y > 0) {
-								const block = thisChunk.getBlock(new Vec3(x, y, z)).name;
-								if (block != "air") {
-									socket.write(new PacketMappingTable[NamedPackets.BlockChange]((packet.x << 4) + x, y, (packet.z << 4) + z, Converter.blockidConveter(block), 0).writePacket());
-									//console.log();
-								}
-							}
+				let chunk = {};
+				for (let y = 0; y < 128; y++) {
+					chunk[y] = {};
+					for (let x = 0; x < 16; x++) {
+						chunk[y][x] = {};
+						for (let z = 0; z < 16; z++) {
+								const block = thisChunk.getBlock(new Vec3(x, y, z));
+								if (block.name != "air") {
+									chunk[y][x][z] = Converter.blockidConveter(block);
+								} else chunk[y][x][z] = [0, 0, block.light];
 						}
 					}
 				}
 
 				//console.log(thisChunk.getBlock(new Vec3(2, 18, 8)).name);
 
-				/*const writer = new bufferStuff.Writer(18);
+				const writer = new bufferStuff.Writer(18);
 
 				writer.writeByte(0x33); // Chunk
-				writer.writeInt(packet.x); // Chunk X
+				writer.writeInt(packet.x << 4); // Chunk X
 				writer.writeShort(0 << 7); // Chunk Y
-				writer.writeInt(packet.z); // Chunk Z
+				writer.writeInt(packet.z << 4); // Chunk Z
 				writer.writeByte(15); // Size X
 				writer.writeByte(127); // Size Y
 				writer.writeByte(15); // Size Z
-
-				console.log(packet.x, packet.z);
-				console.log(packet.x << 4, packet.z << 4);
 
 				// pre-alloc since doing an alloc 98,304 times takes a while yknow.
 				const blocks = new bufferStuff.Writer(32768);
@@ -97,9 +106,9 @@ server.on("connection", (socket) => {
 				for (let x = 0; x < 16; x++) {
 					for (let z = 0; z < 16; z++) {
 						for (let y = 0; y < 128; y++) {
-							blocks.writeByte(Math.floor(Math.random() * 2));
+							blocks.writeByte(chunk[y][x][z][0]); //chunk[y][x][z][0]
 							if (blockMeta) {
-								metadata.writeNibble(0, 0); // NOTE: This is sorta jank but it does work
+								metadata.writeNibble(chunk[y - 1][x][z][1], chunk[y][x][z][1]); // NOTE: This is sorta jank but it does work
 								// Light level 15 for 2 blocks (1111 1111)
 								lighting.writeNibble(15, 15); // TODO: Lighting (Client seems to do it's own (when a block update happens) so it's not top priority)
 							}
@@ -111,14 +120,15 @@ server.on("connection", (socket) => {
 				// These are hacks for the nibbles
 				blocks.writeBuffer(metadata.buffer);
 				blocks.writeBuffer(lighting.buffer); // Block lighting
-				//blocks.writeBuffer(lighting.buffer); // Sky lighting (Looks like this isn't needed???)
+				blocks.writeBuffer(lighting.buffer); // Sky lighting (Looks like this isn't needed???)
 
 				// We're on another thread we don't care if we halt
 				const deflated = deflateSync(blocks.buffer);
 				writer.writeInt(deflated.length); // Compressed Size
 				writer.writeBuffer(deflated); // Compressed chunk data
 
-				socket.write(writer.buffer);*/
+				//socket.write(writer.buffer);
+				chunksToSend.add(writer.buffer);
 
 				//console.log(writer.buffer);
 			break;
@@ -143,18 +153,25 @@ server.on("connection", (socket) => {
 
 			break;
 
+			case "combat_event":
+				console.log(packet);
+			break;
+
 			case "spawn_position":
 				//console.log(packet);
 				socket.write(new PacketMappingTable[NamedPackets.SpawnPosition](packet.location.x, packet.location.y, packet.location.z).writePacket());
 				socket.write(new PacketMappingTable[NamedPackets.PlayerPositionAndLook](packet.location.x, packet.location.y + 1.6200000047683716, packet.location.y, packet.location.z, 0, 0, false).writePacket());
 				
-				socket.write(new PacketMappingTable[NamedPackets.PreChunk](packet.x >> 4, packet.z >> 4, true).writePacket());
+				//socket.write(new PacketMappingTable[NamedPackets.SpawnPosition](0, 22, 0).writePacket());
+				//socket.write(new PacketMappingTable[NamedPackets.PlayerPositionAndLook](0, 22 + 1.6200000047683716, 22, 0, 0, 0, false).writePacket());
 
-				for (let x = 0; x < 16; x++) {
+				//socket.write(new PacketMappingTable[NamedPackets.PreChunk](packet.x >> 4, packet.z >> 4, true).writePacket());
+
+				/*for (let x = 0; x < 16; x++) {
 					for (let z = 0; z < 16; z++) {
 						socket.write(new PacketMappingTable[NamedPackets.BlockChange](((packet.location.x >> 4) << 4) + x, 18, ((packet.location.z >> 4) << 4) + z, 3, 0).writePacket());
 					}
-				}
+				}*/
 
 				//fixedPos.x = packet.location.x;
 				//fixedPos.y = packet.location.y;
@@ -164,6 +181,8 @@ server.on("connection", (socket) => {
 	});
 
 	//thisUser.loginFinished = true;
+
+	let loginFinished = false;
 
 	// Send chunks
 	/*for (let x = -3; x < 4; x++) {
@@ -190,6 +209,22 @@ server.on("connection", (socket) => {
 			socket.write(new PacketMappingTable[NamedPackets.KeepAlive]().writePacket());
 		}
 
+		if (loginFinished) {
+			let itemsToRemove = [];
+			for (let i = 0; i < Math.min(chunksToSend.getLength(), 4); i++) {
+				const chunkKey = chunksToSend.itemKeys[i];
+				itemsToRemove.push(chunkKey);
+				socket.write(chunksToSend.items[chunkKey]);
+				//console.log(chunksToSend.items[chunkKey]);
+			}
+
+			for (let item of itemsToRemove) {
+				chunksToSend.remove(item, false);
+			}
+
+			chunksToSend.regenerateIterableArray();
+		}
+
 		//socket.write(new PacketMappingTable[NamedPackets.PlayerPositionAndLook](fixedPos.x, fixedPos.y + 1.6200000047683716, fixedPos.y, fixedPos.z, 0, 0, false).writePacket());
 		tickCounter++;
 	}, 1000 / 20);
@@ -200,7 +235,13 @@ server.on("connection", (socket) => {
 		//console.log(chunk);
 		const reader = new bufferStuff.Reader(chunk);
 
-		switch (reader.readByte()) {
+		let x,y,z,yaw,pitch,onGround;
+		const packetID = reader.readByte();
+		switch (packetID) {
+			case -1:
+				client.end();
+			break;
+
 			case NamedPackets.LoginRequest:
 				socket.write(new PacketMappingTable[NamedPackets.LoginRequest](reader.readInt(), reader.readString(), reader.readLong(), reader.readByte()).writePacket(34));
 				//socket.write(new PacketMappingTable[NamedPackets.SpawnPosition]().writePacket());
@@ -224,6 +265,8 @@ server.on("connection", (socket) => {
 
 				socket.write(new PacketMappingTable[NamedPackets.SetSlot](0, 36, 3, 64, 0).writePacket());
 
+				loginFinished = true;
+
 				//socket.write(new PacketMappingTable[NamedPackets.PlayerPositionAndLook](8.5, 65 + 1.6200000047683716, 65, 8.5, 0, 0, false).writePacket());
 			break;
 
@@ -244,12 +287,32 @@ server.on("connection", (socket) => {
 			break;
 
 			case NamedPackets.PlayerPosition:
-				const x = reader.readDouble();
-				const y = reader.readDouble();
+				x = reader.readDouble();
+				y = reader.readDouble();
 				reader.readDouble();
-				const z = reader.readDouble();
+				z = reader.readDouble();
 				//console.log(x,y,z);
-				//client.write("position", {x: x, y: y, z:z, onGround: clientOnGround});
+				client.write("position", {x:x, y:y, z:z, onGround:clientOnGround});
+			break;
+
+			case NamedPackets.PlayerLook:
+				yaw = reader.readFloat();
+				pitch = reader.readFloat();
+				client.write("look", {yaw:yaw, pitch:pitch});
+			break;
+
+			case NamedPackets.PlayerPositionAndLook:
+				x = reader.readDouble();
+				y = reader.readDouble();
+				reader.readDouble();
+				z = reader.readDouble();
+				yaw = reader.readFloat();
+				pitch = reader.readFloat();
+				client.write("position_look", {x:x, y:y, z:z, yaw:yaw, pitch:pitch, onGround: clientOnGround});
+			break;
+
+			default:
+				console.log(hexlify(packetID) + ": " + packetID + " - " + NamedPackets[packetID]);
 			break;
 		}
 	});
@@ -259,3 +322,8 @@ server.on("connection", (socket) => {
 		clearInterval(proxyTicker);
 	});
 });
+
+function hexlify(i = 0) {
+	if (i < 10) return `0x0${i.toString(16)}`;
+	else return `0x${i.toString(16)}`;
+}

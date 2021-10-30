@@ -1,7 +1,7 @@
 const Packet = require("./Packet.js");
 
 class Packet13PlayerPositionAndLook extends Packet {
-    constructor(x = 0, stance = 0, y = 0, z = 0, yaw = 0.0, pitch = 0.0) {
+    constructor(x = 0, y = 0, stance = 0, z = 0, yaw = 0.0, pitch = 0.0) {
         super(0x0D);
 
         this.x = x;

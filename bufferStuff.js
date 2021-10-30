@@ -143,6 +143,19 @@ module.exports.Writer = class {
 		return this;
 	}
 
+	writeUInt(data = 0) {
+		if (this.baseSize == 0) {
+			const buff = Buffer.alloc(4);
+			buff.writeUIntBE(data, 0, 4);
+
+			this.writeBuffer(buff);
+		} else {
+			this.buffer.writeUIntBE(data, this.offset, 4);
+			this.offset += 4;
+		}
+		return this;
+	}
+
 	writeLong(data = 0) {
 		if (this.baseSize == 0) {
 			const buff = Buffer.alloc(8);

@@ -4,13 +4,14 @@ const bufferStuff = require("./bufferStuff.js");
 const pRandom = require("./prettyRandom.js");
 const mc = require('minecraft-protocol');
 const Chunk = require("prismarine-chunk")("1.16.5");
+const Block = require("prismarine-block")("1.16.5");
 const Vec3 = require("vec3");
 const NamedPackets = require("./NamedPackets.js");
 const PacketMappingTable = require("./PacketMappingTable.js");
 const BlockConverter = require("./BlockConverter.js");
 
 function serverConnection(client) {
-	const proxyClient = mc.createClient({
+	let proxyClient = mc.createClient({
 		host: "192.168.2.240",   // optional minecraft.eusv.ml
 		port: 27896,         // optional
 		username: "mc125",
@@ -25,16 +26,20 @@ function serverConnection(client) {
 			break;
 
 			case "update_time":
-				//socket.write(new PacketMappingTable[NamedPackets.TimeUpdate](packet.time).writePacket());
+				client.write(new PacketMappingTable[NamedPackets.TimeUpdate](packet.time).writePacket());
 			break;
 
 			case "position":
-				//socket.write(new PacketMappingTable[NamedPackets.PlayerPositionAndLook](packet.x, packet.y + 1.6200000047683716, packet.y, packet.z, packet.yaw, packet.pitch, false).writePacket());
-				//proxyClient.write("teleport_confirm", {teleportId: packet.teleportId});
+				client.write(new PacketMappingTable[NamedPackets.PlayerPositionAndLook](packet.x, packet.y + 1.6200000047683716, packet.y, packet.z, packet.yaw, packet.pitch, false).writePacket());
+				proxyClient.write("teleport_confirm", {teleportId: packet.teleportId});
 			break;
 
 			case "player_info":
-
+				for (let user of packet.data) {
+					if (user.name == "mc125") {
+						proxyClient.myUUID = user.UUID;
+					}
+				}
 			break;
 
 			case "chat":
@@ -53,6 +58,11 @@ function serverConnection(client) {
 				thisChunk.load(packet.chunkData, packet.bitMap, false, packet.groundUp);
 
 				ChunkData(client, packet, thisChunk);
+			break;
+
+			case "block_change":
+				const block = Block.fromStateId(packet.type);
+				console.log(block);
 			break;
 
 			case "update_view_position":
@@ -101,6 +111,10 @@ server.on("connection", (socket) => {
 
 	let proxyClient = null;
 
+	let clientOnGround = true;
+
+	let shouldSendPos = false;
+
 	socket.on("data", (buffer) => {
 		const reader = new bufferStuff.Reader(buffer);
 		const packetID = reader.readUByte();
@@ -120,18 +134,64 @@ server.on("connection", (socket) => {
 				}, 1000 / 20);
 
 				proxyClient = serverConnection(socket);
+
+				setTimeout(() => shouldSendPos = true, 1000);
 			break;
 
 			case NamedPackets.Handshake:
 				Handshake(socket, reader);
 			break;
 
-			case NamedPackets.PlayerPosition:
+			case NamedPackets.Player:
+				clientOnGround = reader.readBool();
+			break;
 
+			case NamedPackets.EntityAction:
+				if (reader.readInt() == 0) {
+					const actionID = reader.readUByte();
+					switch (actionID) {
+						// Crouch & Uncrouch
+						case 1:
+						case 2:
+
+					}
+				}
+			break;
+
+			case NamedPackets.PlayerPosition:
+				if (!shouldSendPos) return;
+				x = reader.readDouble();
+				y = reader.readDouble();
+				reader.readDouble();
+				z = reader.readDouble();
+				proxyClient.write("position", {x:x, y:y, z:z, onGround:clientOnGround});
+			break;
+
+			case NamedPackets.PlayerLook:
+				if (!shouldSendPos) return;
+				yaw = reader.readFloat();
+				pitch = reader.readFloat();
+				proxyClient.write("look", {yaw:yaw, pitch:pitch});
+			break;
+
+			case NamedPackets.PlayerPositionAndLook:
+				if (!shouldSendPos) return;
+				x = reader.readDouble();
+				y = reader.readDouble();
+				reader.readDouble();
+				z = reader.readDouble();
+				yaw = reader.readFloat();
+				pitch = reader.readFloat();
+				proxyClient.write("position_look", {x:x, y:y, z:z, yaw:yaw, pitch:pitch, onGround: clientOnGround});
 			break;
 
 			case NamedPackets.ServerListPing:
 				socket.write(new PacketMappingTable[NamedPackets.DisconnectOrKick]("JE Proxy Test§0§20").writePacket());
+			break;
+
+			case NamedPackets.DisconnectOrKick:
+				if (proxyClient != null)
+					proxyClient.end();
 			break;
 
 			default:
@@ -154,7 +214,7 @@ server.on("connection", (socket) => {
 			.writeInt(0)
 			.writeString("") // Unused
 			.writeString("default") // Level Type
-			.writeInt(0) // Gamemode
+			.writeInt(1) // Gamemode
 			.writeInt(0) // Dimension
 			.writeUByte(0) // Difficulty
 			.writeUByte(0) // Unused
@@ -188,8 +248,8 @@ server.on("connection", (socket) => {
 function ChunkData(socket, data = {}, modernChunk = new Chunk) {
 	const chunkAlloc = new bufferStuff.Writer()
 		.writeUByte(0x32)
-		.writeInt(data.x << 4)
-		.writeInt(data.z << 4)
+		.writeInt(data.x)
+		.writeInt(data.z)
 		.writeBool(true)
 
 	socket.write(chunkAlloc.buffer);
@@ -203,21 +263,20 @@ function ChunkData(socket, data = {}, modernChunk = new Chunk) {
 
 	const chunkData = new bufferStuff.Writer();
 
+	const blocks = new bufferStuff.Writer(16384);
+	const metadata = new bufferStuff.Writer(8192);
+	const blockLight = new bufferStuff.Writer(8192);
+	const skyLight = new bufferStuff.Writer(8192);
 	for (let section = 0; section < 4; section++) {
-		const blocks = new bufferStuff.Writer(4096);
-		const metadata = new bufferStuff.Writer(2048);
-		const blockLight = new bufferStuff.Writer(2048);
-		const skyLight = new bufferStuff.Writer(2048);
-
 		let nibbleHack = false;
-		for (let x = 0; x < 16; x++) {
+		for (let y = 0; y < 16; y++) {
 			for (let z = 0; z < 16; z++) {
-				for (let y = 0; y < 16; y++) {
+				for (let x = 0; x < 16; x++) {
 					const block = BlockConverter(modernChunk.getBlock(new Vec3(x, y + (section << 4), z)));
 					blocks.writeUByte(block[0])
 
 					if (nibbleHack) {
-						metadata.writeNibble(block[1], BlockConverter(modernChunk.getBlock(new Vec3(x, y + (section << 4), z)))[1]);
+						metadata.writeNibble(BlockConverter(modernChunk.getBlock(new Vec3(x - 1, y + (section << 4), z)))[1], block[1]);
 						blockLight.writeNibble(15, 15);
 						skyLight.writeNibble(15, 15);
 					}
@@ -225,26 +284,26 @@ function ChunkData(socket, data = {}, modernChunk = new Chunk) {
 				}
 			}
 		}
-
-		chunkData.writeBuffer(blocks.buffer);
-		chunkData.writeBuffer(metadata.buffer);
-		chunkData.writeBuffer(blockLight.buffer);
-		chunkData.writeBuffer(skyLight.buffer);
 	}
+	chunkData.writeBuffer(blocks.buffer);
+	chunkData.writeBuffer(metadata.buffer);
+	chunkData.writeBuffer(blockLight.buffer);
+	chunkData.writeBuffer(skyLight.buffer);
 	chunkData.writeBuffer(biome.buffer);
 
 	deflate(chunkData.buffer, (err, deflated) => {
 		if (err) throw err;
 
-		const writer = new bufferStuff.Writer(19)
+		const writer = new bufferStuff.Writer(22)
 			.writeUByte(0x33) // ChunkData
-			.writeInt(data.x << 4)
-			.writeInt(data.z << 4)
-			.writeBool(data.groundUp)
-			.writeUByte(15)
-			.writeInt(deflated.length)
-			.writeInt(0)
-			.writeBuffer(deflated)
+			.writeInt(data.x) // X
+			.writeInt(data.z) // Z
+			.writeBool(data.groundUp) // Ground-up
+			.writeUShort(15) // Primary bit map
+			.writeUShort(0) // Add bit map
+			.writeUInt(deflated.length) // Compressed size
+			.writeInt(0) // Unused
+			.writeBuffer(deflated) // Chunk data (compressed)
 
 		socket.write(writer.buffer);
 	});

@@ -6,6 +6,7 @@
 */
 
 const Packet0KeepAlive = require("./Packets/Packet0KeepAlive.js"),
+	  Packet4TimeUpdate = require("./Packets/Packet4TimeUpdate.js"),
 	  Packet6SpawnPosition = require("./Packets/Packet6SpawnPosition.js"),
 	  Packet13PlayerPositionAndLook = require("./Packets/Packet13PlayerPositionAndLook.js"),
 	  Packet254ServerListPing = require("./Packets/Packet254ServerListPing.js"),
@@ -15,8 +16,8 @@ const mappingTable = {
 	0x00: Packet0KeepAlive,
 	/*0x01: Packet1LoginRequest,
 	0x02: Packet2Handshake,
-	0x03: Packet3Chat,
-	0x04: Packet4TimeUpdate,*/
+	0x03: Packet3Chat,*/
+	0x04: Packet4TimeUpdate,
 	0x06: Packet6SpawnPosition,
 	/*0x08: Packet8UpdateHealth,
 	0x0A: Packet10Player,*/

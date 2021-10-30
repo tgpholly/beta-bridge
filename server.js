@@ -1,4 +1,5 @@
 const server = (require("net").Server)();
+const { deflate } = require("zlib");
 const bufferStuff = require("./bufferStuff.js");
 const pRandom = require("./prettyRandom.js");
 const mc = require('minecraft-protocol');
@@ -6,12 +7,13 @@ const Chunk = require("prismarine-chunk")("1.16.5");
 const Vec3 = require("vec3");
 const NamedPackets = require("./NamedPackets.js");
 const PacketMappingTable = require("./PacketMappingTable.js");
+const BlockConverter = require("./BlockConverter.js");
 
 function serverConnection(client) {
 	const proxyClient = mc.createClient({
 		host: "192.168.2.240",   // optional minecraft.eusv.ml
 		port: 27896,         // optional
-		username: "mcb1732",
+		username: "mc125",
 		auth: 'mojang', // optional; by default uses mojang, if using a microsoft account, set to 'microsoft'
 		version: "1.16.5"
 	});
@@ -49,6 +51,8 @@ function serverConnection(client) {
 				if (!packet.groundUp || packet.chunkData.length == 0) return;
 
 				thisChunk.load(packet.chunkData, packet.bitMap, false, packet.groundUp);
+
+				ChunkData(client, packet, thisChunk);
 			break;
 
 			case "update_view_position":
@@ -76,8 +80,8 @@ function serverConnection(client) {
 			break;
 
 			case "spawn_position":
-				//socket.write(new PacketMappingTable[NamedPackets.SpawnPosition](packet.location.x, packet.location.y, packet.location.z).writePacket());
-				//socket.write(new PacketMappingTable[NamedPackets.PlayerPositionAndLook](packet.location.x, packet.location.y + 1.6200000047683716, packet.location.y, packet.location.z, 0, 0, false).writePacket());
+				client.write(new PacketMappingTable[NamedPackets.SpawnPosition](packet.location.x, packet.location.y, packet.location.z).writePacket());
+				client.write(new PacketMappingTable[NamedPackets.PlayerPositionAndLook](packet.location.x, packet.location.y + 1.6200000047683716, packet.location.y, packet.location.z, 0, 0, false).writePacket());
 			break;
 		}
 	});
@@ -91,12 +95,7 @@ server.listen(25565, () => console.log("lmao"));
 
 server.on("connection", (socket) => {
 	let tickCounter = 0;
-	const tickInterval = setInterval(() => {
-		if (tickCounter % 20 == 0) {
-			socket.write(new PacketMappingTable[NamedPackets.KeepAlive]().writePacket());
-		}
-		tickCounter++;
-	}, 1000 / 20);
+	let tickInterval = null;
 	
 	let proxyUsername = "";
 
@@ -112,6 +111,13 @@ server.on("connection", (socket) => {
 
 			case NamedPackets.LoginRequest:
 				LoginRequest(socket, reader);
+
+				tickInterval = setInterval(() => {
+					if (tickCounter % 20 == 0) {
+						socket.write(new PacketMappingTable[NamedPackets.KeepAlive]().writePacket());
+					}
+					tickCounter++;
+				}, 1000 / 20);
 
 				proxyClient = serverConnection(socket);
 			break;
@@ -178,3 +184,68 @@ server.on("connection", (socket) => {
 	socket.on("close", dcErr);
 	socket.on("error", dcErr);
 });
+
+function ChunkData(socket, data = {}, modernChunk = new Chunk) {
+	const chunkAlloc = new bufferStuff.Writer()
+		.writeUByte(0x32)
+		.writeInt(data.x << 4)
+		.writeInt(data.z << 4)
+		.writeBool(true)
+
+	socket.write(chunkAlloc.buffer);
+
+	const biome = new bufferStuff.Writer(256);
+	for (let x = 0; x < 16; x++) {
+		for (let z = 0; z < 16; z++) {
+			biome.writeUByte(0);
+		}
+	}
+
+	const chunkData = new bufferStuff.Writer();
+
+	for (let section = 0; section < 4; section++) {
+		const blocks = new bufferStuff.Writer(4096);
+		const metadata = new bufferStuff.Writer(2048);
+		const blockLight = new bufferStuff.Writer(2048);
+		const skyLight = new bufferStuff.Writer(2048);
+
+		let nibbleHack = false;
+		for (let x = 0; x < 16; x++) {
+			for (let z = 0; z < 16; z++) {
+				for (let y = 0; y < 16; y++) {
+					const block = BlockConverter(modernChunk.getBlock(new Vec3(x, y + (section << 4), z)));
+					blocks.writeUByte(block[0])
+
+					if (nibbleHack) {
+						metadata.writeNibble(block[1], BlockConverter(modernChunk.getBlock(new Vec3(x, y + (section << 4), z)))[1]);
+						blockLight.writeNibble(15, 15);
+						skyLight.writeNibble(15, 15);
+					}
+					nibbleHack = !nibbleHack;
+				}
+			}
+		}
+
+		chunkData.writeBuffer(blocks.buffer);
+		chunkData.writeBuffer(metadata.buffer);
+		chunkData.writeBuffer(blockLight.buffer);
+		chunkData.writeBuffer(skyLight.buffer);
+	}
+	chunkData.writeBuffer(biome.buffer);
+
+	deflate(chunkData.buffer, (err, deflated) => {
+		if (err) throw err;
+
+		const writer = new bufferStuff.Writer(19)
+			.writeUByte(0x33) // ChunkData
+			.writeInt(data.x << 4)
+			.writeInt(data.z << 4)
+			.writeBool(data.groundUp)
+			.writeUByte(15)
+			.writeInt(deflated.length)
+			.writeInt(0)
+			.writeBuffer(deflated)
+
+		socket.write(writer.buffer);
+	});
+}

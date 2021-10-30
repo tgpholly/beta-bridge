@@ -62,7 +62,12 @@ const namedPackets = {
 	"Transaction": 0x6A,
 	"UpdateSign": 0x82,
 	"ItemData": 0x83,
+	"UpdateTileEntity": 0x84,
 	"IncrementStatistic": 0xC8,
+	"PlayerListItem": 0xC9,
+	"PlayerAbilities": 0xCA,
+	"PluginMessage": 0xFA,
+	"ServerListPing": 0xFE,
 	"DisconnectOrKick": 0xFF
 };
 

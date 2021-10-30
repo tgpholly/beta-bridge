@@ -19,20 +19,25 @@ module.exports.Writer = class {
 	}
 
 	reset() {
-		this.buffer = Buffer.alloc(0);
+		this.buffer = Buffer.alloc(this.baseSize);
+		this.offset = 0;
+		return this;
 	}
 
 	writeBuffer(buff = Buffer.alloc(0)) {
 		this.buffer = Buffer.concat([this.buffer, buff], this.buffer.length + buff.length);
+		return this;
 	}
 
 	writeBool(data = false) {
-		this.writeByte(data ? 1 : 0);
+		this.writeUByte(data ? 1 : 0);
+		return this;
 	}
 
 	// NOTE: Currently writing a nibble requires you to write both halves at the same time.
 	writeNibble(nibble1 = 0, nibble2 = 0) {
 		this.writeUByte(nibble1 | (nibble2 << 4));
+		return this;
 	}
 
 	writeByte(data = 0) {
@@ -45,6 +50,7 @@ module.exports.Writer = class {
 			this.buffer.writeInt8(data, this.offset);
 			this.offset += 1;
 		}
+		return this;
 	}
 
 	writeUByte(data = 0) {
@@ -57,6 +63,7 @@ module.exports.Writer = class {
 			this.buffer.writeUInt8(data, this.offset);
 			this.offset += 1;
 		}
+		return this;
 	}
 
 	writeByteArray(data = [0]) {
@@ -74,6 +81,7 @@ module.exports.Writer = class {
 				this.offset += 1;
 			}
 		}
+		return this;
 	}
 
 	writeShort(data = 0) {
@@ -86,6 +94,20 @@ module.exports.Writer = class {
 			this.buffer.writeIntBE(data, this.offset, 2);
 			this.offset += 2;
 		}
+		return this;
+	}
+
+	writeUShort(data = 0) {
+		if (this.baseSize == 0) {
+			const buff = Buffer.alloc(2);
+			buff.writeUIntBE(data, 0, 2);
+
+			this.writeBuffer(buff);
+		} else {
+			this.buffer.writeUIntBE(data, this.offset, 2);
+			this.offset += 2;
+		}
+		return this;
 	}
 
 	writeShortArray(data = [0]) {
@@ -105,6 +127,7 @@ module.exports.Writer = class {
 				this.offset += 2;
 			}
 		}
+		return this;
 	}
 
 	writeInt(data = 0) {
@@ -117,6 +140,7 @@ module.exports.Writer = class {
 			this.buffer.writeIntBE(data, this.offset, 4);
 			this.offset += 4;
 		}
+		return this;
 	}
 
 	writeLong(data = 0) {
@@ -131,6 +155,7 @@ module.exports.Writer = class {
 			else this.buffer.writeBigInt64BE(BigInt(data), this.offset);
 			this.offset += 8;
 		}
+		return this;
 	}
 
 	writeFloat(data = 0.0) {
@@ -143,6 +168,7 @@ module.exports.Writer = class {
 			this.buffer.writeFloatBE(data, this.offset);
 			this.offset += 4;
 		}
+		return this;
 	}
 
 	writeDouble(data = 0.0) {
@@ -155,14 +181,16 @@ module.exports.Writer = class {
 			this.buffer.writeDoubleBE(data, this.offset);
 			this.offset += 8;
 		}
+		return this;
 	}
 
 	writeString(string = "") {
-		this.writeShort(string.length);
+		this.writeUShort(string.length);
 
 		for (let i = 0; i < string.length; i++) {
-			this.writeShort(string.charCodeAt(i));
+			this.writeUShort(string.charCodeAt(i));
 		}
+		return this;
 	}
 }
 
@@ -178,6 +206,12 @@ module.exports.Reader = class {
 
 	readByte() {
 		const data = this.buffer.readInt8(this.offset);
+		this.offset += 1;
+		return data;
+	}
+
+	readUByte() {
+		const data = this.buffer.readUInt8(this.offset);
 		this.offset += 1;
 		return data;
 	}

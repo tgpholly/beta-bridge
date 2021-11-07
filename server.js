@@ -60,9 +60,13 @@ function serverConnection(client) {
 				ChunkData(client, packet, thisChunk);
 			break;
 
+			case "unload_chunk":
+				AllocateChunk(client, packet.chunkX, packet.chunkZ, true);
+			break;
+
 			case "block_change":
 				const block = Block.fromStateId(packet.type);
-				console.log(block);
+				//console.log(block);
 			break;
 
 			case "update_view_position":
@@ -185,6 +189,10 @@ server.on("connection", (socket) => {
 				proxyClient.write("position_look", {x:x, y:y, z:z, yaw:yaw, pitch:pitch, onGround: clientOnGround});
 			break;
 
+			case NamedPackets.PlayerBlockPlacement:
+				
+			break;
+
 			case NamedPackets.ServerListPing:
 				socket.write(new PacketMappingTable[NamedPackets.DisconnectOrKick]("JE Proxy Test§0§20").writePacket());
 			break;
@@ -245,14 +253,18 @@ server.on("connection", (socket) => {
 	socket.on("error", dcErr);
 });
 
-function ChunkData(socket, data = {}, modernChunk = new Chunk) {
+function AllocateChunk(socket, x = 0, z = 0, unload = false) {
 	const chunkAlloc = new bufferStuff.Writer()
 		.writeUByte(0x32)
-		.writeInt(data.x)
-		.writeInt(data.z)
-		.writeBool(true)
+		.writeInt(x)
+		.writeInt(z)
+		.writeBool(!unload);
 
 	socket.write(chunkAlloc.buffer);
+}
+
+function ChunkData(socket, data = {}, modernChunk = new Chunk) {
+	AllocateChunk(socket, data.x, data.z);
 
 	const biome = new bufferStuff.Writer(256);
 	for (let x = 0; x < 16; x++) {

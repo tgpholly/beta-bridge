@@ -274,13 +274,13 @@ function ChunkData(socket, data = {}, modernChunk = new Chunk) {
 	}
 
 	const chunkData = new bufferStuff.Writer();
-
-	const blocks = new bufferStuff.Writer(16384);
-	const metadata = new bufferStuff.Writer(8192);
-	const blockLight = new bufferStuff.Writer(8192);
-	const skyLight = new bufferStuff.Writer(8192);
-	for (let section = 0; section < 4; section++) {
+	const blocks = new bufferStuff.Writer(65536);
+	const metadata = new bufferStuff.Writer(32768);
+	const blockLight = new bufferStuff.Writer(32768);
+	const skyLight = new bufferStuff.Writer(32768);
+	for (let section = 0; section < 16; section++) {
 		let nibbleHack = false;
+
 		for (let y = 0; y < 16; y++) {
 			for (let z = 0; z < 16; z++) {
 				for (let x = 0; x < 16; x++) {
@@ -311,7 +311,7 @@ function ChunkData(socket, data = {}, modernChunk = new Chunk) {
 			.writeInt(data.x) // X
 			.writeInt(data.z) // Z
 			.writeBool(data.groundUp) // Ground-up
-			.writeUShort(15) // Primary bit map
+			.writeUShort(65535) // Primary bit map
 			.writeUShort(0) // Add bit map
 			.writeUInt(deflated.length) // Compressed size
 			.writeInt(0) // Unused

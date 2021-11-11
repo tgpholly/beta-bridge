@@ -189,7 +189,7 @@ server.on("connection", (socket) => {
 				if (!shouldSendPos) return;
 				x = reader.readDouble();
 				y = reader.readDouble();
-				reader.readDouble();
+				reader.skipDouble(); // Couldn't care less about stance and neither could the modern server
 				z = reader.readDouble();
 				proxyClient.write("position", {x:x, y:y, z:z, onGround:clientOnGround});
 			break;
@@ -205,7 +205,7 @@ server.on("connection", (socket) => {
 				if (!shouldSendPos) return;
 				x = reader.readDouble();
 				y = reader.readDouble();
-				reader.readDouble();
+				reader.skipDouble(); // Couldn't care less about stance and neither could the modern server
 				z = reader.readDouble();
 				yaw = reader.readFloat();
 				pitch = reader.readFloat();

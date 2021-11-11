@@ -229,10 +229,18 @@ module.exports.Reader = class {
 		return data;
 	}
 
+	skipByte() {
+		this.offset += 1;
+	}
+
 	readShort() {
 		const data = this.buffer.readIntBE(this.offset, 2);
 		this.offset += 2;
 		return data;
+	}
+
+	skipShort() {
+		this.offset += 2;
 	}
 
 	readInt() {
@@ -241,10 +249,18 @@ module.exports.Reader = class {
 		return data;
 	}
 
+	skipInt() {
+		this.offset += 4;
+	}
+
 	readLong() {
 		const data = this.buffer.readBigInt64BE(this.offset);
 		this.offset += 8;
 		return data;
+	}
+
+	skipLong() {
+		this.offset += 8;
 	}
 
 	readFloat() {
@@ -253,10 +269,18 @@ module.exports.Reader = class {
 		return data;
 	}
 
+	skipFloat() {
+		this.offset += 4;
+	}
+
 	readDouble() {
 		const data = this.buffer.readDoubleBE(this.offset);
 		this.offset += 8;
 		return data;
+	}
+
+	skipDouble() {
+		this.offset += 8;
 	}
 
 	readString() {
@@ -268,5 +292,11 @@ module.exports.Reader = class {
 		}
 
 		return data;
+	}
+
+	skipString() {
+		const length = this.readShort();
+
+		this.offset += length;
 	}
 }

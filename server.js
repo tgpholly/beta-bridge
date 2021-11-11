@@ -69,6 +69,22 @@ function serverConnection(client) {
 				//console.log(block);
 			break;
 
+			case "open_window":
+				//console.log(packet);
+			break;
+
+			case "window_items":
+				//console.log(packet);
+				let slotArray = [];
+				for (let i = 0; i < packet.items.length; i++) {
+					const slot = packet.items[i];
+					if (!slot.present) slotArray.push(null);
+					else slotArray.push([Block.fromStateId(slot.itemId).name, slot.itemCount, slot.nbtData]);
+				}
+
+				console.log(slotArray);
+			break;
+
 			case "update_view_position":
 
 			break;

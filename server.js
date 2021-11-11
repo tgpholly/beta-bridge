@@ -82,7 +82,7 @@ function serverConnection(client) {
 					else slotArray.push([Block.fromStateId(slot.itemId).name, slot.itemCount, slot.nbtData]);
 				}
 
-				console.log(slotArray);
+				SendFullInventory(client, slotArray);
 			break;
 
 			case "update_view_position":
@@ -275,6 +275,33 @@ server.on("connection", (socket) => {
 	socket.on("close", dcErr);
 	socket.on("error", dcErr);
 });
+
+function SendFullInventory(socket, data = []) {
+	const inventoryValues = new bufferStuff.Writer()
+	for (let i = 0; i < data.length; i++) {
+		const slot = data[i];
+		if (slot == null) inventoryValues.writeShort(-1);
+		else {
+			const block = BlockConverter(slot[0]);
+			inventoryValues.writeShort(block[0])
+				.writeByte(slot[1])
+				.writeShort(block[1])
+		}
+	}
+
+	const inventory = new bufferStuff.Writer()
+		.writeUByte(0x68)
+		.writeUByte(0)
+		.writeUShort(data.length)
+		.writeBuffer(inventoryValues.buffer);
+
+	let asdf = [];
+	for (let i = 0; i < inventory.buffer.length; i++) {
+		asdf.push(inventory.buffer[i]);
+	}
+	console.log(asdf);
+	socket.write(inventory.buffer);
+}
 
 function AllocateChunk(socket, x = 0, z = 0, unload = false) {
 	const chunkAlloc = new bufferStuff.Writer()

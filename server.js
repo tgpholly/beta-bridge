@@ -146,6 +146,12 @@ server.on("connection", (socket) => {
 				Handshake(socket, reader);
 			break;
 
+			case NamedPackets.ChatMessage:
+				proxyClient.write('chat', {message: reader.readString()});
+				//client.write(
+				
+			break;
+
 			case NamedPackets.Player:
 				clientOnGround = reader.readBool();
 			break;

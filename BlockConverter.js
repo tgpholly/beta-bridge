@@ -40,6 +40,87 @@ module.exports = function(block) {
 			else if (props.type == "bottom") return [44, 0];
 			else return [44, 8];
 
+		// Concrete
+		case "black_terracotta":
+		case "black_concrete":
+		case "black_wool":
+			return [35,15];
+
+		case "red_terracotta":
+		case "red_concrete":
+		case "red_wool":
+			return [35,14];
+
+		case "green_terracotta":
+		case "green_concrete":
+		case "green_wool":
+			return [35,13];
+
+		case "brown_terracotta":
+		case "brown_concrete":
+		case "brown_wool":
+			return [35,12];
+
+		case "blue_terracotta":
+		case "blue_concrete":
+		case "blue_wool":
+			return [35,11];
+
+		case "purple_terracotta":
+		case "purple_concrete":
+		case "purple_wool":
+			return [35,10];
+
+		case "cyan_terracotta":
+		case "cyan_concrete":
+		case "cyan_wool":
+			return [35,9];
+
+		case "light_gray_terracotta":
+		case "light_gray_concrete":
+		case "light_gray_wool":
+			return [35,8];
+
+		case "gray_terracotta":
+		case "gray_concrete":
+		case "gray_wool":
+			return [35,7];
+
+		case "pink_terracotta":
+		case "pink_concrete":
+		case "pink_wool":
+			return [35,6];
+
+		case "lime_terracotta":
+		case "lime_concrete":
+		case "lime_wool":
+			return [35,5];
+
+		case "yellow_terracotta":
+		case "yellow_concrete":
+		case "yellow_wool":
+			return [35,4];
+
+		case "light_blue_terracotta":
+		case "light_blue_concrete":
+		case "light_blue_wool":
+			return [35,3];
+
+		case "magenta_terracotta":
+		case "magenta_concrete":
+		case "magenta_wool":
+			return [35,2];
+
+		case "orange_terracotta":			
+		case "orange_concrete":
+		case "orange_wool":
+			return [35,1];
+
+		case "white_terracotta":w
+		case "white_concrete":
+		case "white_wool":
+			return [35,0];
+
 		case "water":
 			return [9, 0];
 
@@ -89,6 +170,8 @@ module.exports = function(block) {
 		case "stripped_acacia_log":
 		case "stripped_oak_wood":
 		case "stripped_acacia_wood":
+			//props = block.getProperties();
+			//console.log(props);
 			return [17,0];
 
 		case "dark_oak_log":

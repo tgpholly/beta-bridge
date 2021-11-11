@@ -128,6 +128,7 @@ server.on("connection", (socket) => {
 			break;
 
 			case NamedPackets.LoginRequest:
+				if (proxyClient != null) return;
 				LoginRequest(socket, reader);
 
 				tickInterval = setInterval(() => {

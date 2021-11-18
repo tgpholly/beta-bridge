@@ -279,27 +279,26 @@ server.on("connection", (socket) => {
 function SendFullInventory(socket, data = []) {
 	const inventoryValues = new bufferStuff.Writer()
 	for (let i = 0; i < data.length; i++) {
+function SendFullInventory(socket, data = [], inventorySize = 45) {
+	const inventoryValues = new bufferStuff.Writer();
+
+	for (let i = 0; i < Math.min(data.length, inventorySize); i++) {
 		const slot = data[i];
 		if (slot == null) inventoryValues.writeShort(-1);
 		else {
 			const block = BlockConverter(slot[0]);
 			inventoryValues.writeShort(block[0])
 				.writeByte(slot[1])
-				.writeShort(block[1])
+				.writeShort(0)
 		}
 	}
 
 	const inventory = new bufferStuff.Writer()
 		.writeUByte(0x68)
 		.writeUByte(0)
-		.writeUShort(data.length)
+		.writeUShort(Math.min(data.length, inventorySize))
 		.writeBuffer(inventoryValues.buffer);
 
-	let asdf = [];
-	for (let i = 0; i < inventory.buffer.length; i++) {
-		asdf.push(inventory.buffer[i]);
-	}
-	console.log(asdf);
 	socket.write(inventory.buffer);
 }
 

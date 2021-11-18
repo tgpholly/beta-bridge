@@ -9,8 +9,66 @@ const Vec3 = require("vec3");
 const NamedPackets = require("./NamedPackets.js");
 const PacketMappingTable = require("./PacketMappingTable.js");
 const BlockConverter = require("./BlockConverter.js");
+const { Worker } = require('worker_threads');
+const FunkyArray = require("./funkyArray.js");
 
-function serverConnection(client) {
+// Thread shit start
+const workerPath = `${__dirname}/Workers/ThreadWorker.js`;
+let toRemove = [];
+let threadPool = [];
+let workPool = new FunkyArray();
+
+let socketArray = new FunkyArray();
+
+// WoAh!!! Thread pool in js!?!??!???!11!?!?!
+for (let i = 0; i < 4; i++) {
+	const worker = new Worker(workerPath);
+	threadPool.push([false, worker]);
+	const myID = i;
+	worker.on("message", (data) => {
+		switch (data[0]) {
+			case "chunk":
+				socketArray.getByKey(data[2]).write(Buffer.from(data[1]));
+				toRemove.push(data[3]); // Set this job to be removed
+				threadPool[myID][0] = false; // Set thread as not busy
+			break;
+		}
+	});
+}
+
+setInterval(() => {
+	for (let item of toRemove) {
+		workPool.remove(item, false);
+	}
+	if (toRemove.length != 0) workPool.regenerateIterableArray();
+
+	if (workPool.getLength() != 0) {
+		let limit = Math.min(workPool.getLength(), threadPool.length);
+		for (let i = 0; i < limit; i++) {
+			for (let i1 = 0; i1 < threadPool.length; i1++) {
+				let thread = threadPool[i1];
+				if (!thread[0]) {
+					const key = workPool.itemKeys[i];
+					const item = workPool.getByKey(key);
+					// Already being processed
+					if (item == null) break;
+					if (item[0] == true) {
+						limit += 1;
+						break;
+					}
+					item[0] = true;
+					item[1][3] = key;
+					thread[1].postMessage(item[1]);
+					thread[0] = true;
+					break;
+				}
+			}
+		}
+	}
+}, 1000 / 60);
+// Thread shit end
+
+function serverConnection(client, socketId) {
 	let proxyClient = mc.createClient({
 		host: "192.168.2.240",   // optional minecraft.eusv.ml
 		port: 27896,         // optional
@@ -51,13 +109,14 @@ function serverConnection(client) {
 			break;
 
 			case "map_chunk":
-				const thisChunk = new Chunk();
+				//const thisChunk = new Chunk();
 
-				if (!packet.groundUp || packet.chunkData.length == 0) return;
+				if (!packet.groundUp || packet.chunkData.length == 0) return; // Need to handle non ground-up chunks
 
-				thisChunk.load(packet.chunkData, packet.bitMap, false, packet.groundUp);
+				//thisChunk.load(packet.chunkData, packet.bitMap, false, packet.groundUp);
 
-				ChunkData(client, packet, thisChunk);
+				AllocateChunk(client, packet.x, packet.z);
+				ChunkData(socketId, packet);//, thisChunk);
 			break;
 
 			case "unload_chunk":
@@ -126,6 +185,8 @@ server.listen(25565, () => console.log("lmao"));
 server.on("connection", (socket) => {
 	let tickCounter = 0;
 	let tickInterval = null;
+
+	const socketId = socketArray.addAndReturnKey(socket);
 	
 	let proxyUsername = "";
 
@@ -154,7 +215,7 @@ server.on("connection", (socket) => {
 					tickCounter++;
 				}, 1000 / 20);
 
-				proxyClient = serverConnection(socket);
+				proxyClient = serverConnection(socket, socketId);
 
 				setTimeout(() => shouldSendPos = true, 1000);
 			break;
@@ -276,9 +337,6 @@ server.on("connection", (socket) => {
 	socket.on("error", dcErr);
 });
 
-function SendFullInventory(socket, data = []) {
-	const inventoryValues = new bufferStuff.Writer()
-	for (let i = 0; i < data.length; i++) {
 function SendFullInventory(socket, data = [], inventorySize = 45) {
 	const inventoryValues = new bufferStuff.Writer();
 
@@ -312,10 +370,10 @@ function AllocateChunk(socket, x = 0, z = 0, unload = false) {
 	socket.write(chunkAlloc.buffer);
 }
 
-function ChunkData(socket, data = {}, modernChunk = new Chunk) {
-	AllocateChunk(socket, data.x, data.z);
+function ChunkData(socketid, data = {}) { //modernChunk = new Chunk
+	workPool.add([false, ["chunk", data, socketid, null]]);
 
-	const biome = new bufferStuff.Writer(256);
+	/*const biome = new bufferStuff.Writer(256);
 	for (let x = 0; x < 16; x++) {
 		for (let z = 0; z < 16; z++) {
 			biome.writeUByte(0);
@@ -367,5 +425,5 @@ function ChunkData(socket, data = {}, modernChunk = new Chunk) {
 			.writeBuffer(deflated) // Chunk data (compressed)
 
 		socket.write(writer.buffer);
-	});
+	});*/
 }

@@ -374,6 +374,15 @@ module.exports = function(block) {
 			if (props.face == "floor" || props.fade == "ceiling") return [0, 0];
 			else return [2,0];
 
+		case "snow":
+			return [78, 0];
+
+		case "glass_pane":
+			return [102, 0];
+
+		case "torch":
+			return [50, 0];
+
 		case "snow_block":
 		case "smooth_quartz":
 		case "chiseled_quartz_block":

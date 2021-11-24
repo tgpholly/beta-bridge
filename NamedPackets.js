@@ -23,7 +23,7 @@ const namedPackets = {
 	"PlayerPositionAndLook": 0x0D,
 	"PlayerDigging": 0x0E,
 	"PlayerBlockPlacement": 0x0F,
-	"HoldingChange": 0x10,
+	"HeldItemChange": 0x10,
 	"UseBed": 0x11,
 	"Animation": 0x12,
 	"EntityAction": 0x13,

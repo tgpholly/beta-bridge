@@ -130,6 +130,16 @@ function serverConnection(client, socketId) {
 		version: "1.16.5"
 	});
 
+	proxyClient.on("end", (reason) => {
+		console.log(reason);
+	});
+
+	proxyClient.on("error", (err) => {
+		console.error(err);
+	});
+
+	proxyClient.on("state", (newState, oldState) => console.log(newState, oldState));
+
 	proxyClient.on('packet', function(packet, packetMeta) {
 		switch (packetMeta.name) {
 			case "update_health":
@@ -345,7 +355,15 @@ server.on("connection", (socket) => {
 			break;
 
 			case NamedPackets.PlayerBlockPlacement:
-				
+				console.log()
+			break;
+
+			case NamedPackets.HeldItemChange:
+				slotId = reader.readShort();
+
+				console.log(slotId);
+
+				proxyClient.write("held_item_slot", {slot:slotId});
 			break;
 
 			case NamedPackets.ServerListPing:
@@ -378,7 +396,7 @@ server.on("connection", (socket) => {
 			.writeInt(0)
 			.writeString("") // Unused
 			.writeString("default") // Level Type
-			.writeInt(1) // Gamemode
+			.writeInt(0) // Gamemode
 			.writeInt(0) // Dimension
 			.writeUByte(0) // Difficulty
 			.writeUByte(0) // Unused

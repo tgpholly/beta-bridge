@@ -3,7 +3,6 @@ const { parentPort } = require('worker_threads'),
 const Chunk = require("prismarine-chunk")("1.16.5");
 const Vec3 = require("vec3");
 const BlockConverter = require("../BlockConverter.js");
-
 const bufferStuff = require("../bufferStuff.js");
 
 let busyInterval = null;

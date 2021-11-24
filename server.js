@@ -68,6 +68,59 @@ setInterval(() => {
 }, 1000 / 60);
 // Thread shit end
 
+const colourTable = {
+	"dark_red": "\u00A74",
+	"red": "\u00A7c",
+	"gold": "\u00A76",
+	"yellow": "\u00A7e",
+	"dark_green": "\u00A72",
+	"green": "\u00A7a",
+	"aqua": "\u00A7b",
+	"dark_aqua": "\u00A73",
+	"dark_blue": "\u00A71",
+	"blue": "\u00A79",
+	"light_purple": "\u00A7d",
+	"dark_purple": "\u00A75",
+	"white": "\u00A7f",
+	"gray": "\u00A77",
+	"dark_gray": "\u00A78",
+	"black": "\u00A70",
+};
+
+function jsonTextToText(json = "") {
+	const parsedJson = JSON.parse(json);
+
+	let outText = "";
+
+	if (Object.keys(parsedJson).includes("extra")) {
+		for (let t of parsedJson.extra) {
+			if (Object.keys(t).includes("color")) outText += `${colourTable[t.color]}${t.text}`;
+			else outText += t.text;
+		}
+	}
+
+	outText += parsedJson.text;
+
+	return outText;
+}
+
+function jsonTextToSignText(json = "") {
+	const parsedJson = JSON.parse(json);
+
+	let outText = "";
+
+	if (Object.keys(parsedJson).includes("extra")) {
+		for (let t of parsedJson.extra) {
+			if (Object.keys(t).includes("color")) outText += t.text;
+			else outText += t.text;
+		}
+	}
+
+	outText += parsedJson.text;
+
+	return outText.slice(0, 15);
+}
+
 function serverConnection(client, socketId) {
 	let proxyClient = mc.createClient({
 		host: "192.168.2.240",   // optional minecraft.eusv.ml
@@ -101,7 +154,7 @@ function serverConnection(client, socketId) {
 			break;
 
 			case "chat":
-				//socket.write(new PacketMappingTable[NamedPackets.ChatMessage](Converter.jsonTextToText(packet.message)).writePacket());
+				client.write(new PacketMappingTable[NamedPackets.ChatMessage](jsonTextToText(packet.message)).writePacket());
 			break;
 
 			case "update_light":
@@ -126,6 +179,10 @@ function serverConnection(client, socketId) {
 			case "block_change":
 				const block = Block.fromStateId(packet.type);
 				//console.log(block);
+			break;
+
+			case "update_sign":
+				console.log(packet);
 			break;
 
 			case "open_window":
@@ -161,7 +218,21 @@ function serverConnection(client, socketId) {
 			break;
 
 			case "tile_entity_data":
-
+				//console.log(packet);
+				switch (packet.action) {
+					case 9:
+						client.write(new PacketMappingTable[NamedPackets.UpdateSign](
+							packet.location.x,
+							packet.location.y,
+							packet.location.z,
+							jsonTextToSignText(packet.nbtData.value.Text1.value),
+							jsonTextToSignText(packet.nbtData.value.Text2.value),
+							jsonTextToSignText(packet.nbtData.value.Text3.value),
+							jsonTextToSignText(packet.nbtData.value.Text4.value)
+						).writePacket());
+						//console.log(packet.nbtData.value);
+					break;
+				}
 			break;
 
 			case "combat_event":
@@ -293,6 +364,7 @@ server.on("connection", (socket) => {
 	});
 
 	function LoginRequest(socket, reader = new bufferStuff.Reader) {
+		console.log(reader.buffer);
 		if (reader.readInt() != 29)
 			return socket.write(new PacketMappingTable[NamedPackets.DisconnectOrKick]("Incorrect game version! (Proxy version = 1.2.5)").writePacket());
 

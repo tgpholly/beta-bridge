@@ -18,6 +18,21 @@ parentPort.on("message", (data) => {
 	}
 });
 
+const addArray = new bufferStuff.Writer(32768);
+for (let section = 0; section < 16; section++) {
+	let nibbleHack = false;
+	for (let y = 0; y < 16; y++) {
+		for (let z = 0; z < 16; z++) {
+			for (let x = 0; x < 16; x++) {
+				if (nibbleHack) {
+					addArray.writeNibble(0, 0);
+				}
+				nibbleHack = !nibbleHack;
+			}
+		}
+	}
+}
+
 function doChunk(packet) {
 	const modernChunk = new Chunk();
 
@@ -46,8 +61,14 @@ function doChunk(packet) {
 
 					if (nibbleHack) {
 						metadata.writeNibble(BlockConverter(modernChunk.getBlock(new Vec3(x - 1, y + (section << 4), z)))[1], block[1]);
-						blockLight.writeNibble(15, 15);
-						skyLight.writeNibble(15, 15);
+						blockLight.writeNibble(
+							modernChunk.getBlockLight(new Vec3(x - 1, y + (section << 4), z)),
+							modernChunk.getBlockLight(new Vec3(x, y + (section << 4), z))
+						);
+						skyLight.writeNibble(
+							modernChunk.getSkyLight(new Vec3(x - 1, y + (section << 4), z)),
+							modernChunk.getSkyLight(new Vec3(x, y + (section << 4), z))
+						);
 					}
 					nibbleHack = !nibbleHack;
 				}
@@ -58,6 +79,7 @@ function doChunk(packet) {
 	chunkData.writeBuffer(metadata.buffer);
 	chunkData.writeBuffer(blockLight.buffer);
 	chunkData.writeBuffer(skyLight.buffer);
+	chunkData.writeBuffer(addArray.buffer);
 	chunkData.writeBuffer(biome.buffer);
 
 	const deflatedData = deflateSync(chunkData.buffer);

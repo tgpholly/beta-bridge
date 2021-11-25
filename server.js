@@ -16,7 +16,7 @@ const FunkyArray = require("./funkyArray.js");
 const workerPath = `${__dirname}/Workers/ThreadWorker.js`;
 let toRemove = [];
 let threadPool = [];
-let workPool = new FunkyArray();
+let workPool = new FunkyArray(true);
 
 let socketArray = new FunkyArray();
 
@@ -125,7 +125,7 @@ function serverConnection(client, socketId) {
 	let proxyClient = mc.createClient({
 		host: "192.168.2.240",   // optional minecraft.eusv.ml
 		port: 27896,         // optional
-		username: "mc125",
+		username: "mc125.2",
 		auth: 'mojang', // optional; by default uses mojang, if using a microsoft account, set to 'microsoft'
 		version: "1.16.5"
 	});
@@ -143,7 +143,7 @@ function serverConnection(client, socketId) {
 	proxyClient.on('packet', function(packet, packetMeta) {
 		switch (packetMeta.name) {
 			case "update_health":
-				//socket.write(new PacketMappingTable[NamedPackets.UpdateHealth](packet.health + 1).writePacket());
+				client.write(new PacketMappingTable[NamedPackets.UpdateHealth](packet.health, packet.food, packet.foodSaturation).writePacket());
 			break;
 
 			case "update_time":
@@ -172,11 +172,7 @@ function serverConnection(client, socketId) {
 			break;
 
 			case "map_chunk":
-				//const thisChunk = new Chunk();
-
 				if (!packet.groundUp || packet.chunkData.length == 0) return; // Need to handle non ground-up chunks
-
-				//thisChunk.load(packet.chunkData, packet.bitMap, false, packet.groundUp);
 
 				AllocateChunk(client, packet.x, packet.z);
 				ChunkData(socketId, packet);//, thisChunk);
@@ -187,8 +183,15 @@ function serverConnection(client, socketId) {
 			break;
 
 			case "block_change":
-				const block = Block.fromStateId(packet.type);
-				//console.log(block);
+				const block = BlockConverter(Block.fromStateId(packet.type));
+				
+				client.write(new PacketMappingTable[NamedPackets.BlockChange](
+					packet.location.x,
+					packet.location.y,
+					packet.location.z,
+					block[0],
+					block[1]
+				).writePacket());
 			break;
 
 			case "update_sign":
@@ -250,6 +253,7 @@ function serverConnection(client, socketId) {
 			break;
 
 			case "spawn_position":
+				client.shouldSendPos = true;
 				client.write(new PacketMappingTable[NamedPackets.SpawnPosition](packet.location.x, packet.location.y, packet.location.z).writePacket());
 				client.write(new PacketMappingTable[NamedPackets.PlayerPositionAndLook](packet.location.x, packet.location.y + 1.6200000047683716, packet.location.y, packet.location.z, 0, 0, false).writePacket());
 			break;
@@ -275,7 +279,7 @@ server.on("connection", (socket) => {
 
 	let clientOnGround = true;
 
-	let shouldSendPos = false;
+	socket.shouldSendPos = false;
 
 	socket.on("data", (buffer) => {
 		const reader = new bufferStuff.Reader(buffer);
@@ -298,7 +302,7 @@ server.on("connection", (socket) => {
 
 				proxyClient = serverConnection(socket, socketId);
 
-				setTimeout(() => shouldSendPos = true, 1000);
+				//setTimeout(() => shouldSendPos = true, 1000);
 			break;
 
 			case NamedPackets.Handshake:
@@ -313,6 +317,7 @@ server.on("connection", (socket) => {
 
 			case NamedPackets.Player:
 				clientOnGround = reader.readBool();
+				proxyClient.write("flying", {onGround:clientOnGround});
 			break;
 
 			case NamedPackets.EntityAction:
@@ -328,34 +333,67 @@ server.on("connection", (socket) => {
 			break;
 
 			case NamedPackets.PlayerPosition:
-				if (!shouldSendPos) return;
+				if (!socket.shouldSendPos) return;
 				x = reader.readDouble();
 				y = reader.readDouble();
 				reader.skipDouble(); // Couldn't care less about stance and neither could the modern server
 				z = reader.readDouble();
+				clientOnGround = reader.readBool();
+
 				proxyClient.write("position", {x:x, y:y, z:z, onGround:clientOnGround});
 			break;
 
 			case NamedPackets.PlayerLook:
-				if (!shouldSendPos) return;
+				if (!socket.shouldSendPos) return;
 				yaw = reader.readFloat();
 				pitch = reader.readFloat();
-				proxyClient.write("look", {yaw:yaw, pitch:pitch});
+				clientOnGround = reader.readBool();
+
+				proxyClient.write("look", {yaw:yaw, pitch:pitch, onGround:clientOnGround});
 			break;
 
 			case NamedPackets.PlayerPositionAndLook:
-				if (!shouldSendPos) return;
+				if (!socket.shouldSendPos) return;
 				x = reader.readDouble();
 				y = reader.readDouble();
 				reader.skipDouble(); // Couldn't care less about stance and neither could the modern server
 				z = reader.readDouble();
 				yaw = reader.readFloat();
 				pitch = reader.readFloat();
+				clientOnGround = reader.readBool();
+
 				proxyClient.write("position_look", {x:x, y:y, z:z, yaw:yaw, pitch:pitch, onGround: clientOnGround});
 			break;
 
+			case NamedPackets.PlayerDigging:
+				state = reader.readByte();
+				x = reader.readInt();
+				y = reader.readUByte();
+				z = reader.readInt();
+				face = reader.readUByte();
+
+				if (state == 0 && state == 2) {
+					proxyClient.write("block_dig", {status:state, location:{x:x, y:y, z:z}, face:face});
+				} else {
+
+				}
+			break;
+			
+			case NamedPackets.Respawn:
+
+			break;
+
 			case NamedPackets.PlayerBlockPlacement:
-				console.log()
+				console.log(reader.buffer);
+			break;
+
+			case NamedPackets.Animation:
+				EID = reader.readInt();
+				animation = reader.readByte();
+
+				if (animation == 1) {
+					proxyClient.write("arm_animation", {hand:0});
+				}
 			break;
 
 			case NamedPackets.HeldItemChange:

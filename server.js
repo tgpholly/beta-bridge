@@ -257,6 +257,18 @@ function serverConnection(client, socketId) {
 				client.write(new PacketMappingTable[NamedPackets.SpawnPosition](packet.location.x, packet.location.y, packet.location.z).writePacket());
 				client.write(new PacketMappingTable[NamedPackets.PlayerPositionAndLook](packet.location.x, packet.location.y + 1.6200000047683716, packet.location.y, packet.location.z, 0, 0, false).writePacket());
 			break;
+
+			case "block_action":
+				console.log(packet);
+				switch (packet.blockId) {
+					// NoteBlock
+					case 74:
+						client.write(new PacketMappingTable[NamedPackets.BlockAction](packet.location.x, packet.location.y, packet.location.z, packet.byte1, packet.byte2).writePacket());
+
+					case 100:
+						client.write(new PacketMappingTable[NamedPackets.BlockAction](packet.location.x, packet.location.y, packet.location.z, packet.byte1, packet.byte2).writePacket());
+				}
+			break;
 		}
 	});
 

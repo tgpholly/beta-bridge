@@ -33,17 +33,26 @@ for (let section = 0; section < 16; section++) {
 	}
 }
 
+const biome = new bufferStuff.Writer(256);
+for (let x = 0; x < 16; x++) {
+	for (let z = 0; z < 16; z++) {
+		biome.writeUByte(0);
+	}
+}
+
+const theVec3 = new Vec3(0, 0, 0);
+function set(x = 0, y = 0, z = 0) {
+	theVec3.x = x;
+	theVec3.y = y;
+	theVec3.z = z;
+
+	return theVec3;
+}
+
 function doChunk(packet) {
 	const modernChunk = new Chunk();
 
 	modernChunk.load(Buffer.from(packet.chunkData), packet.bitMap, false, packet.groundUp);
-
-	const biome = new bufferStuff.Writer(256);
-	for (let x = 0; x < 16; x++) {
-		for (let z = 0; z < 16; z++) {
-			biome.writeUByte(0);
-		}
-	}
 
 	const chunkData = new bufferStuff.Writer();
 	const blocks = new bufferStuff.Writer(65536);
@@ -56,18 +65,18 @@ function doChunk(packet) {
 		for (let y = 0; y < 16; y++) {
 			for (let z = 0; z < 16; z++) {
 				for (let x = 0; x < 16; x++) {
-					const block = BlockConverter(modernChunk.getBlock(new Vec3(x, y + (section << 4), z)));
+					const block = BlockConverter(modernChunk.getBlock(set(x, y + (section << 4), z)));
 					blocks.writeUByte(block[0])
 
 					if (nibbleHack) {
-						metadata.writeNibble(BlockConverter(modernChunk.getBlock(new Vec3(x - 1, y + (section << 4), z)))[1], block[1]);
+						metadata.writeNibble(BlockConverter(modernChunk.getBlock(set(x - 1, y + (section << 4), z)))[1], block[1]);
 						blockLight.writeNibble(
-							modernChunk.getBlockLight(new Vec3(x - 1, y + (section << 4), z)),
-							modernChunk.getBlockLight(new Vec3(x, y + (section << 4), z))
+							modernChunk.getBlockLight(set(x - 1, y + (section << 4), z)),
+							modernChunk.getBlockLight(set(x, y + (section << 4), z))
 						);
 						skyLight.writeNibble(
-							modernChunk.getSkyLight(new Vec3(x - 1, y + (section << 4), z)),
-							modernChunk.getSkyLight(new Vec3(x, y + (section << 4), z))
+							modernChunk.getSkyLight(set(x - 1, y + (section << 4), z)),
+							modernChunk.getSkyLight(set(x, y + (section << 4), z))
 						);
 					}
 					nibbleHack = !nibbleHack;

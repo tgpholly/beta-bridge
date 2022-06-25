@@ -65,7 +65,7 @@ setInterval(() => {
 			}
 		}
 	}
-}, 1000 / 60);
+}, 1000 / 144);
 // Thread shit end
 
 const colourTable = {
@@ -92,7 +92,9 @@ function jsonTextToText(json = "") {
 
 	let outText = "";
 
+	console.log(parsedJson);
 	if (Object.keys(parsedJson).includes("extra")) {
+		
 		for (let t of parsedJson.extra) {
 			if (Object.keys(t).includes("color")) outText += `${colourTable[t.color]}${t.text}`;
 			else outText += t.text;
@@ -100,6 +102,23 @@ function jsonTextToText(json = "") {
 	}
 
 	outText += parsedJson.text;
+
+	return outText;
+}
+
+function chatTextJsonToText(json = "") {
+	const parsedJson = JSON.parse(json);
+
+	let outText = "";
+
+	if (parsedJson.translate != "chat.type.text") return "NOT A CHAT TEXT MESSAGE";
+	for (let thing of parsedJson.with) {
+		if (typeof(thing) == "object") {
+			outText += `<${thing.text}> `;
+		} else {
+			outText += thing;
+		}
+	}
 
 	return outText;
 }
@@ -121,11 +140,17 @@ function jsonTextToSignText(json = "") {
 	return outText.slice(0, 15);
 }
 
-function serverConnection(client, socketId) {
+let idCount = 0;
+let playerInfo = {};
+let playerInfoKeys = [];
+let playerByEntityId = {};
+
+function serverConnection(client, socketId, username) {
+	console.log(username);
 	let proxyClient = mc.createClient({
-		host: "192.168.2.240",   // optional minecraft.eusv.ml
-		port: 27896,         // optional
-		username: "mc125.2",
+		host: "127.0.0.1",   // optional
+		port: 38461,         // optional
+		username: username,
 		auth: 'mojang', // optional; by default uses mojang, if using a microsoft account, set to 'microsoft'
 		version: "1.16.5"
 	});
@@ -157,18 +182,25 @@ function serverConnection(client, socketId) {
 
 			case "player_info":
 				for (let user of packet.data) {
-					if (user.name == "mc125") {
-						proxyClient.myUUID = user.UUID;
+					if (user.name != null) {
+						if (user.name == "mc125") {
+							proxyClient.myUUID = user.UUID;
+						} else {
+							playerInfo[user.UUID] = user;
+							playerInfoKeys = Object.keys(playerInfo);
+						}
+					} else {
+						playerInfo[user.UUID].ping = user.ping;
 					}
 				}
 			break;
 
 			case "chat":
-				client.write(new PacketMappingTable[NamedPackets.ChatMessage](jsonTextToText(packet.message)).writePacket());
+				client.write(new PacketMappingTable[NamedPackets.ChatMessage](chatTextJsonToText(packet.message)).writePacket());
 			break;
 
 			case "update_light":
-
+				//console.log(packet);
 			break;
 
 			case "map_chunk":
@@ -192,6 +224,10 @@ function serverConnection(client, socketId) {
 					block[0],
 					block[1]
 				).writePacket());
+			break;
+
+			case "multi_block_change":
+				//console.log(packet);
 			break;
 
 			case "update_sign":
@@ -219,10 +255,6 @@ function serverConnection(client, socketId) {
 			break;
 
 			case "spawn_entity_living":
-
-			break;
-
-			case "entity_head_rotation":
 
 			break;
 
@@ -258,6 +290,191 @@ function serverConnection(client, socketId) {
 				client.write(new PacketMappingTable[NamedPackets.PlayerPositionAndLook](packet.location.x, packet.location.y + 1.6200000047683716, packet.location.y, packet.location.z, 0, 0, false).writePacket());
 			break;
 
+			case "named_entity_spawn":
+				if (playerInfo[packet.playerUUID] != null) {
+					(() => {
+						const player = playerInfo[packet.playerUUID];
+						playerByEntityId[packet.entityId] = player;
+						player.entityId = packet.entityId;
+						player.x = packet.x;
+						player.y = packet.y;
+						player.z = packet.z;
+						player.lastX = packet.x;
+						player.lastY = packet.y;
+						player.lastZ = packet.z;
+						player.yaw = packet.yaw;
+						player.pitch = packet.pitch;
+						
+						const writer = new bufferStuff.Writer();
+						writer.writeUByte(0x14);
+						writer.writeInt(player.entityId);
+						writer.writeString(player.name);
+						writer.writeInt(Math.round(packet.x * 32));
+						writer.writeInt(Math.round(packet.y * 32));
+						writer.writeInt(Math.round(packet.z * 32));
+						writer.writeByte(packet.yaw);
+						writer.writeByte(packet.pitch);
+						writer.writeShort(0);
+
+						client.write(writer.buffer);
+					})();
+				}
+			break;
+
+			case "rel_entity_move":
+				(() => {
+					const player = playerByEntityId[packet.entityId];
+					
+					if (player != null) {
+						// This is a player
+
+						player.x = ((player.x * 4096) + packet.dX) / 4096;
+						player.y = ((player.y * 4096) + packet.dY) / 4096;
+						player.z = ((player.z * 4096) + packet.dZ) / 4096;
+						const dX = player.x - player.lastX;
+						const dY = player.y - player.lastY;
+						const dZ = player.z - player.lastZ;
+						player.lastX = player.x;
+						player.lastY = player.y;
+						player.lastZ = player.z;
+
+						if (dX < -4 || dX > 4 || dY < -4 || dY > 4 || dZ < -4 || dZ > 4) {
+							// Non relative for 1.2.5
+							console.log("Player TELEPORT")
+						} else {
+							const writer = new bufferStuff.Writer(8);
+							writer.writeUByte(0x1F);
+							writer.writeInt(player.entityId);
+							writer.writeByte(Math.floor(dX * 32));
+							writer.writeByte(Math.floor(dY * 32));
+							writer.writeByte(Math.floor(dZ * 32));
+
+							client.write(writer.buffer);
+						}
+					} else {
+						// This a normal entity
+						
+					}
+				})();
+			break;
+
+			case "entity_move_look":
+				(() => {
+					const player = playerByEntityId[packet.entityId];
+
+					if (player != null) {
+						// This is a player
+
+						player.x = ((player.x * 4096) + packet.dX) / 4096;
+						player.y = ((player.y * 4096) + packet.dY) / 4096;
+						player.z = ((player.z * 4096) + packet.dZ) / 4096;
+						const dX = player.x - player.lastX;
+						const dY = player.y - player.lastY;
+						const dZ = player.z - player.lastZ;
+						player.lastX = player.x;
+						player.lastY = player.y;
+						player.lastZ = player.z;
+
+						if (dX < -4 || dX > 4 || dY < -4 || dY > 4 || dZ < -4 || dZ > 4) {
+							// Non relative for 1.2.5
+							console.log("Player TELEPORT")
+						} else {
+							const writer = new bufferStuff.Writer(10);
+							writer.writeUByte(0x21);
+							writer.writeInt(player.entityId);
+							writer.writeByte(Math.floor(dX * 32));
+							writer.writeByte(Math.floor(dY * 32));
+							writer.writeByte(Math.floor(dZ * 32));
+							writer.writeUByte(Math.round(((360 + packet.yaw) % 360) / 360 * 256));
+							writer.writeUByte(Math.round(((360 + packet.pitch) % 360) / 360 * 256));
+
+							client.write(writer.buffer);
+						}
+					} else {
+						// This a normal entity
+						
+					}
+				})();
+			break;
+
+			case "entity_look":
+				(() => {
+					const player = playerByEntityId[packet.entityId];
+
+					if (player != null) {
+						// This is a player
+
+						const writer = new bufferStuff.Writer(7);
+						writer.writeUByte(0x20);
+						writer.writeInt(player.entityId);
+						writer.writeUByte(Math.round(((360 + packet.yaw) % 360) / 360 * 256));
+						writer.writeUByte(Math.round(((360 + packet.pitch) % 360) / 360 * 256));
+
+						client.write(writer.buffer);
+					} else {
+						// This a normal entity
+						
+					}
+				})();
+			break;
+
+			case "entity_head_rotation":
+				(() => {
+					const player = playerByEntityId[packet.entityId];
+
+					if (player != null) {
+						// This is a player
+
+						//console.log(() / 256);
+
+						const writer = new bufferStuff.Writer(6);
+						writer.writeUByte(0x23);
+						writer.writeInt(packet.entityId);
+						writer.writeByte(packet.headYaw);
+
+						client.write(writer.buffer);
+					} else {
+						// This a normal entity
+						
+					}
+				})();
+			break;
+
+			case "entity_velocity":
+				//console.log(packet);
+				(() => {
+					const player = playerByEntityId[packet.entityId];
+					if (player) {
+						console.log("PLAYER", packet.velocityX / 8000, packet.velocityY / 8000, packet.velocityZ / 8000);
+						const writer = new bufferStuff.Writer(11);
+						writer.writeUByte(0x1C);
+						writer.writeInt(packet.entityId);
+						writer.writeShort(packet.velocityX / 8000 * 32000);
+						writer.writeShort(packet.velocityY / 8000 * 32000);
+						writer.writeShort(packet.velocityZ / 8000 * 32000);
+					}
+				})();
+			break;
+
+			case "entity_teleport":
+				(() => {
+					const player = playerByEntityId[packet.entityId];
+					if (player) {
+						console.log(packet);
+						const writer = new bufferStuff.Writer(19);
+						writer.writeUByte(0x22);
+						writer.writeInt(packet.entityId);
+						writer.writeInt(Math.floor(packet.x * 32));
+						writer.writeInt(Math.floor(packet.y * 32));
+						writer.writeInt(Math.floor(packet.z * 32));
+						writer.writeUByte(Math.round(((360 + packet.yaw) % 360) / 360 * 256));
+						writer.writeUByte(Math.round(((360 + packet.pitch) % 360) / 360 * 256));
+
+						client.write(writer.buffer);
+					}
+				})();
+			break;
+
 			case "block_action":
 				console.log(packet);
 				switch (packet.blockId) {
@@ -268,6 +485,14 @@ function serverConnection(client, socketId) {
 					case 100:
 						client.write(new PacketMappingTable[NamedPackets.BlockAction](packet.location.x, packet.location.y, packet.location.z, packet.byte1, packet.byte2).writePacket());
 				}
+			break;
+
+			case "entity_status":
+				//console.log(packet);
+			break;
+
+			default:
+				//console.log(packetMeta.name);
 			break;
 		}
 	});
@@ -312,7 +537,7 @@ server.on("connection", (socket) => {
 					tickCounter++;
 				}, 1000 / 20);
 
-				proxyClient = serverConnection(socket, socketId);
+				proxyClient = serverConnection(socket, socketId, proxyUsername);
 
 				//setTimeout(() => shouldSendPos = true, 1000);
 			break;
